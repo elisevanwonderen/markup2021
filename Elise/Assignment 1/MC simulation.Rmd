@@ -1,0 +1,66 @@
+---
+title: "Markup Assignment 1"
+author: "Elise van Wonderen"
+date: "28-9-2021"
+output: html_document
+---
+
+```{r}
+library(DT)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+set.seed(42)
+
+nsim <- 100
+M <- 0
+std <- 1
+
+sims <- as.data.frame(matrix(NA, nrow = nsim, ncol = 6))
+colnames(sims) <- c("mean", "bias", "std.err", "lower", "upper", "coverage")
+
+for(i in 1:nsim){
+  x <- rnorm(30, mean = M, sd = std)
+  df <- length(x) - 1
+  sims[i,1] <- mean(x)
+  sims[i,2] <- mean(x) - M
+  sims[i,3] <- std / sqrt(length(x))
+  sims[i,4] <- sims[i,1] - qt(.975, df) * sims[i,3]
+  sims[i,5] <- sims[i,1] + qt(.975, df) * sims[i,3]
+  sims[i,6] <- sims[i,4] < M & sims[i,5] > M
+}
+```
+
+
+There are three samples for which the population value is outside the confidence interval.
+
+```{r}
+sims %>% 
+  filter(!coverage) %>% 
+  round(2) %>% 
+  datatable()
+```
+
+
+Plot with confidence intervals.
+
+```{r}
+sims %>% 
+  mutate(covered = factor(coverage, 
+                             levels = c(FALSE, TRUE),
+                             labels = c("no", "yes"))) %>% 
+ggplot(aes(y=mean, x=1:100, colour = covered)) + 
+  geom_hline(aes(yintercept = 0), color = "grey", lty =2, size =1) + 
+  geom_pointrange(aes(ymax = upper, ymin = lower)) + 
+  xlab("Simulation") +
+  ylab("Means and 95% CIs") +
+  theme_classic()
+```
+
+
+
+
+
+
