@@ -1,0 +1,223 @@
+---
+title: "Meta-analysis vs. Bayesian Evidence Synthesis"
+author: "Elise van Wonderen"
+date: "21 January 2022"
+output: 
+ ioslides_presentation:
+  toc: true
+  logo: UU.png
+  smaller: TRUE
+---
+
+```{r, echo=F, message=F, warning=F}
+library(plotly)
+library(DT)
+library(tidyverse)
+source("functions.R")
+```
+
+## Content
+
+- Introduction
+    - Research synthesis
+    - Comparison of meta-analysis and BES
+    - Meta-analysis
+    - Bayesian evidence synthesis
+- Simulation
+    - Data generation
+    - Sampling population effect sizes
+    - Hypotheses
+    - Simulation results I
+    - Simulation results II
+
+
+# Introduction
+
+## Research synthesis
+
+- Many conflicting results in psychological science (OSC, 2015) 
+<br>
+<br>
+- Further exacerbated by small sample sizes and reliance on statistical significance tests (Button et al., 2013; van Calster et al., 2018) 
+<br>
+<br>
+- Increasing the robustness of results by quantitatively summarizing multiple studies
+    - Meta-analysis
+    - Bayesian Evidence Synthesis (BES)
+    
+    
+## Comparison of meta-analysis and BES
+
+<br>
+
+<div style="float: left; width: 48%;">
+**META-ANALYSIS** <br>
+<br>
+Combines effect sizes <br>
+<br>
+<br>
+Asks what the average effect is in all studies combined (data-pooling method) <br>
+<br>
+Effect sizes need to have the same metric and come from the same model
+</div>
+
+<div style="float: right; width: 48%;">
+**BAYESIAN EVIDENCE SYNTHESIS** <br>
+<br>
+Combines support for a specific hypothesis <br>
+<br>
+Asks to what extent a hypothesis is supported in *each* study (NOT a data-pooling method) <br>
+<br>
+There are no restrictions on which estimates can be combined
+</div>
+
+
+
+## Meta-analysis
+
+Computing meta-analytic effect size $\bar{\beta}$ and its variance $v$ (Hedges & Vevea 1998):
+
+$$ 
+\begin{aligned}
+\bar{\beta} &= \frac{\sum_{k=1}^{K} w_k\hat{\beta_k}}{\sum_{k=1}^{K} w_k} \\
+\\
+w_k &= \frac{1}{var(\hat{\beta_k})} \\
+\\
+v &= \frac{1}{\sum_{k=1}^{K} w_k}
+\end{aligned}
+$$
+<br>
+where $K$ is the number of studies, and $\hat{\beta_k}$ is the estimated effect size of study $k$.
+
+
+
+## Bayesian evidence synthesis
+
+- Combine studies at the level of the hypothesis instead of the effect size
+- Compute study-specific Bayes factors and turn these into posterior model probabilities (PMPs)
+- Then compute an aggregated PMP over all studies (Kuiper et al., 2012):
+
+<br>
+
+$$
+\pi_{K,h} = \frac{\prod_{k=1}^{K}\pi_{k,h}}{\sum_{h=1}^{H}\prod_{k=1}^{K}\pi_{k,h}}
+$$
+<br>
+where $h$ is hypothesis 1, ..., $H$ and $\pi$ is the PMP.
+
+
+# Simulation
+
+## Data generation
+
+Generate data from a regression model with one predictor:
+$$ Y = \beta X_1 + \epsilon, $$
+where $X_1$ is sampled from $\mathcal{N}(0,1)$ and $\epsilon$ is sampled from from $\mathcal{N}(0,\sqrt{1-R^2})$.
+
+<br>
+
+```{r, eval=F}
+beta <- 0.3                                                    # specify beta value
+R2 <- beta^2                                                   # R-squared
+n <- 25                                                        # sample size
+X <- rnorm(n = n, mean = 0, sd = 1)                            # sample X values
+Y <- X * beta + rnorm(n = n, mean = 0, sd = sqrt(1 - R2))      # compute Y
+```
+
+
+## Sampling population effect sizes
+
+Instead of assuming one underlying population effect size, we assume study-specific population effect sizes that randomly deviate from the overall mean following a normal distribution $\mathcal{N}(0.3,0.1)$:
+
+```{r histogram, echo=F, cache=T, message=F, warning=F, fig.align='center', fig.height=3.9, fig.width=6}
+rnorm(n = 2000, mean = 0.3, sd = 0.1) %>% 
+  as.data.frame() %>% 
+  ggplot() +
+  geom_histogram(aes(.), fill = "lightgrey", col = "black") +
+  xlim(c(-0.2, .70)) +
+  geom_vline(xintercept = 0.3, lty=2, col = "blue", size=1) +
+  theme_classic()  +
+  theme(axis.text = element_text(size=12),
+        axis.title = element_text(size=12))
+```
+
+## Hypotheses
+
+We tested $H1: \beta > 0$ against either the null hypothesis ($H0$), the complement hypothesis ($Hc$) or the unconstrained hypothesis ($Hu$):
+
+$$
+\begin{aligned}
+H0&: \ \beta = 0 \\
+Hc&: \ \beta < 0 \\
+Hu&: \ \beta
+\end{aligned}
+$$  
+where $Hu$ means that $\beta$ can take on any value.
+
+
+## Simulation results I
+
+
+```{r datatable, echo=F, warning=F, message=F, cache=T}
+dat <- readRDS("01_equal_sample_sizes.rds")
+dat %>% 
+  filter(nsim == 1) %>% 
+  dplyr::select(-data) %>% 
+  round(digits = 2) %>% 
+  datatable(options = list(pageLength = 5))
+```
+
+## Simulation results II
+
+Proportion of simulations (nsim = 1000) that H1 gets selected over the alternative hypothesis based on the aggregated PMP:
+
+```{r simulation plot, echo=F, warning=F, message=F, fig.align='center', fig.height=3.9, cache=T}
+p <- dat %>% 
+  group_by(n, nsim) %>%
+  mutate(TH10 = best_hypothesis(PMP10),
+         TH1c = best_hypothesis(PMP1c),
+         TH1u = best_hypothesis(PMP1u)) %>%  
+  dplyr::filter(n_study %in%  c(2, 4, 8)) %>%
+  mutate(n_study = as.factor(n_study)) %>%
+  group_by(n, n_study) %>%
+  summarize(H10 = sum(TH10)/n(),
+            H1c = sum(TH1c)/n(),
+            H1u = sum(TH1u)/n()) %>%
+  gather(key = "method", value = "THR",
+         H10, H1c, H1u,
+         factor_key = T) %>%
+  ggplot(mapping = aes(x = n, y = THR, col = n_study, lty= n_study, shape = n_study)) +
+  scale_x_continuous(breaks = seq(15, 120, 45), labels=seq(15, 120, 45))  +
+  geom_line(size =1) +
+  geom_point(size =2) +
+  geom_hline(yintercept = 0.9, lty=2, col="lightgray") +
+  facet_wrap(~method, nrow = 1) +
+  labs(x = "Sample size", y = "") +
+  theme_classic() +
+  theme(axis.text = element_text(size =10))
+
+ggplotly(p)
+```
+
+
+
+
+## References
+
+Button, K. S., Ioannidis, J. P., Mokrysz, C., Nosek, B. A., Flint, J., Robinson, E. S., & Munafò, M. R. (2013). Power failure: why small sample size undermines the reliability of neuroscience. *Nature Reviews Neuroscience, 14*(5), 365-376. https://doi.org/10.1038/nrn3502 
+
+Hedges, L. V., & Vevea, J. L. (1998). Fixed-and random-effects models in meta-analysis. *Psychological Methods, 3*(4), 486. https://doi.org/10.1037/1082-989X.3.4.486
+
+Kuiper, R. M., Buskens, V., Raub, W., & Hoijtink, H. (2013). Combining statistical evidence from several studies: A method using Bayesian updating and an example from research on trust problems in social and economic exchange. *Sociological Methods & Research, 42*(1), 60-81. https://doi.org/10.1177/0049124112464867
+
+Open Science Collaboration (2015). Estimating the reproducibility of psychological science. *Science, 349*(6251), aac4716. https://doi.org/10.1126/science.aac4716 
+
+Van Calster, B., Steyerberg, E. W., Collins, G. S., & Smits, T. (2018). Consequences of relying on statistical significance: Some illustrations. *European Journal of Clinical Investigation, 48*(5), e12912.  https://doi.org/10.1111/eci.12912  
+
+
+
+
+
+
+
+
